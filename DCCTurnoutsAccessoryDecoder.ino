@@ -4,10 +4,10 @@
  *      - DCC Shield by Luca Dentella (see https://github.com/lucadentella/arduino-dccshield)
  *      - Adafruit PCA9685 or other compatible interfaces (see https://www.adafruit.com/product/815)
  * 
- * Release: 1.0.0
+ * Release: 1.1.0
  * 
  * Author: Giovanni Colasurdo
- * Date: April 2022
+ * Date: May 2023
  * 
  */
 
@@ -15,6 +15,11 @@
  * Please comment this line if you don't want to debug this sketch on the serial console
  */
 #define DEBUG 1
+
+/*
+ * Please un-comment this line if you want to execute servo movement in main loop section
+ */
+// #define SERVO_MOVEMENT_IN_LOOP 1
 
 /*
  * Include referenced libraries
@@ -70,7 +75,7 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
  */
 #define DELAY_CV_VALUE            33
 
-#define DELAY_DEFAULT_VALUE       70
+#define DELAY_DEFAULT_VALUE       20
 
 #define MIN_HIGH_CV_VALUE         34
 #define MIN_LOW_CV_VALUE          35
@@ -78,9 +83,9 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 #define MAX_LOW_CV_VALUE          37
 
 #define MIN_HIGH_DEFAULT_VALUE    0
-#define MIN_LOW_DEFAULT_VALUE     0   // default value = (0 * 256) + 0  => 0
+#define MIN_LOW_DEFAULT_VALUE     0   // default value = (0 * 256) + 0   => 0
 #define MAX_HIGH_DEFAULT_VALUE    0
-#define MAX_LOW_DEFAULT_VALUE     50  // default value = (0 * 256) + 50 => 50
+#define MAX_LOW_DEFAULT_VALUE     140 // default value = (0 * 256) + 140 => 140
 
 #define OFFSET_REVERSED_CV_VALUE  38
 
@@ -196,6 +201,10 @@ void loop() {
         // Loop for each servo
         for (int idx = 0; idx < NUM_SERVOS; idx++) {
 
+#ifdef DEBUG
+            Serial.print("Moving servo no. "); Serial.print(idx);
+            Serial.println();
+#endif
             // Execute servo movement
             if (servoStatus[idx].moving) {
 
@@ -203,6 +212,21 @@ void loop() {
                 ServoReversedMode reversedMode = (Dcc.getCV(OFFSET_REVERSED_CV_VALUE + idx) != 0 ? ENABLED : DISABLED);
                 long actualPosition = servoStatus[idx].actualPosition;
 
+#ifdef SERVO_MOVEMENT_IN_LOOP
+                // Apply min or max based on position, reversed mode and movement type to be made
+                if ((servoStatus[idx].positionState == THROWN && reversedMode == DISABLED) ||
+                    (servoStatus[idx].positionState == CLOSED && reversedMode == ENABLED)) {
+                    while (servoStatus[idx].moving) {
+                        executeSingleMovementToMinValue(idx);
+                        delay(servoDelay);
+                    }
+                } else {
+                    while (servoStatus[idx].moving) {
+                        executeSingleMovementToMaxValue(idx);
+                        delay(servoDelay);
+                    }
+                }
+#else
                 // Apply min or max based on position, reversed mode and movement type to be made
                 if ((servoStatus[idx].positionState == THROWN && reversedMode == DISABLED) ||
                     (servoStatus[idx].positionState == CLOSED && reversedMode == ENABLED)) {
@@ -213,6 +237,7 @@ void loop() {
 
                 // Set moved to exec delay
                 moved = true;
+#endif
             }
     
         }
@@ -269,6 +294,13 @@ void executeSingleMovementToMinValue(int idx) {
     // Update last status values
     servoStatus[idx].actualPosition = actualPosition;
     servoStatus[idx].moving = (actualPosition != servoMinValue);
+
+#ifdef DEBUG
+    Serial.print("Move to min value, servo no. "); Serial.print(idx);
+    Serial.print(", position "); Serial.print(actualPosition);
+    Serial.print(", moving "); Serial.print(actualPosition != servoMinValue ? "True" : "False");
+    Serial.println();
+#endif
 }
 
 /*
@@ -294,6 +326,13 @@ void executeSingleMovementToMaxValue(int idx) {
     // Update last status values
     servoStatus[idx].actualPosition = actualPosition;
     servoStatus[idx].moving = (actualPosition != servoMaxValue);
+
+#ifdef DEBUG
+    Serial.print("Move to max value, servo no. "); Serial.print(idx);
+    Serial.print(", position "); Serial.print(actualPosition);
+    Serial.print(", moving "); Serial.print(actualPosition != servoMaxValue ? "True" : "False");
+    Serial.println();
+#endif
 }
 
 /*
